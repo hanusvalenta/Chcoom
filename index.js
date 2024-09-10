@@ -32,8 +32,9 @@ function resizeCanvas() {
 
 async function loadTextures() {
     const textureSources = {
-        wall: 'wall.png',  // Replace with the path to your wall texture image
-        enemy: 'enemy.png' // Replace with the path to your enemy sprite image
+        wall: 'wall.png',
+        enemy: 'enemy.png',
+        hand: 'hand.png'
     };
 
     const promises = Object.entries(textureSources).map(([key, src]) =>
@@ -67,13 +68,13 @@ async function loadMap() {
 function spawnEnemies() {
     for (let row = 0; row < map.length; row++) {
         for (let col = 0; col < map[row].length; col++) {
-            if (map[row][col] === 3) { // Enemy tile
+            if (map[row][col] === 3) {
                 enemies.push({
                     x: col * TILE_SIZE + TILE_SIZE / 2,
                     y: row * TILE_SIZE + TILE_SIZE / 2,
                     sprite: 'enemy'
                 });
-                map[row][col] = 0; // Clear the enemy position on the map
+                map[row][col] = 0;
             }
         }
     }
@@ -88,6 +89,7 @@ function gameLoop() {
     updatePlayer();
     castRays();
     renderEnemies();
+    drawHand();
     drawMiniMap();
     requestAnimationFrame(gameLoop);
 }
@@ -143,8 +145,8 @@ function castRays() {
 
         ctx.drawImage(
             textures.wall,
-            textureOffset, 0, 1, TILE_SIZE,  // Source from texture
-            i, (canvas.height - sliceHeight) / 2, 1, sliceHeight  // Destination on canvas
+            textureOffset, 0, 1, TILE_SIZE,
+            i, (canvas.height - sliceHeight) / 2, 1, sliceHeight
         );
     }
 }
@@ -181,16 +183,30 @@ function renderEnemies() {
         const screenX = (relativeAngle / FOV + 0.5) * canvas.width;
 
         if (distance > 0 && screenX >= 0 && screenX <= canvas.width) {
-            const spriteSize = (TILE_SIZE / distance) * 300;
-            ctx.drawImage(
-                textures[enemy.sprite],
-                screenX - spriteSize / 2,
-                canvas.height / 2 - spriteSize / 2,
-                spriteSize,
-                spriteSize
-            );
+            const rayHit = castSingleRay(angleToEnemy);
+            if (rayHit.distance > distance) {
+                const spriteSize = (TILE_SIZE / distance) * 300;
+                ctx.drawImage(
+                    textures[enemy.sprite],
+                    screenX - spriteSize / 2,
+                    canvas.height / 2 - spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+            }
         }
     });
+}
+
+function drawHand() {
+    const handScale = 1.5; // Scale factor for the hand sprite
+    const handWidth = textures.hand.width * handScale;
+    const handHeight = textures.hand.height * handScale;
+
+    const xPos = (canvas.width / 2) - (handWidth / 2);
+    const yPos = canvas.height - handHeight - 30;
+
+    ctx.drawImage(textures.hand, xPos, yPos, handWidth, handHeight);
 }
 
 function drawMiniMap() {
