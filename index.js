@@ -18,7 +18,7 @@ const player = {
 
 let map = [];
 let currentMapIndex = 0;
-const maps = ['map1.json', 'map2.json']; // List of map files
+const maps = ['map1.json', 'map2.json', 'map3.json']; // List of map files
 
 const keys = {
     forward: false,
@@ -165,10 +165,18 @@ function castRays() {
     const halfFOV = FOV / 2;
     const startAngle = player.angle - halfFOV;
     const numRays = canvas.width;
+    const rays = [];
 
     for (let i = 0; i < numRays; i++) {
         const rayAngle = startAngle + (i / numRays) * FOV;
         const { distance, textureOffset } = castSingleRay(rayAngle);
+        rays.push({ rayAngle, distance, textureOffset, i });
+    }
+
+    // Sort rays by distance (depth buffering)
+    rays.sort((a, b) => a.distance - b.distance);
+
+    rays.forEach(({ rayAngle, distance, textureOffset, i }) => {
         const sliceHeight = (TILE_SIZE / distance) * 300;
 
         ctx.drawImage(
@@ -176,7 +184,7 @@ function castRays() {
             textureOffset, 0, 1, TILE_SIZE,
             i, (canvas.height - sliceHeight) / 2, 1, sliceHeight
         );
-    }
+    });
 }
 
 function castSingleRay(angle) {
@@ -197,6 +205,19 @@ function castSingleRay(angle) {
 }
 
 function renderEnemies() {
+    // Sort enemies by distance from the player
+    enemies.sort((a, b) => {
+        const dxA = a.x - player.x;
+        const dyA = a.y - player.y;
+        const dxB = b.x - player.x;
+        const dyB = b.y - player.y;
+
+        const distanceA = Math.sqrt(dxA * dxA + dyA * dyA);
+        const distanceB = Math.sqrt(dxB * dxB + dyB * dyB);
+
+        return distanceA - distanceB;
+    });
+
     enemies.forEach(enemy => {
         const dx = enemy.x - player.x;
         const dy = enemy.y - player.y;
