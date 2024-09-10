@@ -57,7 +57,7 @@ async function loadMap() {
         const data = await response.json();
         map = data.map;
         await loadTextures();
-        spawnEnemies();
+        spawnEntities();
         resizeCanvas();
         startGame();
     } catch (error) {
@@ -65,16 +65,24 @@ async function loadMap() {
     }
 }
 
-function spawnEnemies() {
+function spawnEntities() {
+    let spawnFound = false;
+
     for (let row = 0; row < map.length; row++) {
         for (let col = 0; col < map[row].length; col++) {
-            if (map[row][col] === 3) {
+            const tile = map[row][col];
+
+            if (tile === 3) { // Enemy tile
                 enemies.push({
                     x: col * TILE_SIZE + TILE_SIZE / 2,
                     y: row * TILE_SIZE + TILE_SIZE / 2,
                     sprite: 'enemy'
                 });
-                map[row][col] = 0;
+                map[row][col] = 0; // Clear the enemy position on the map
+            } else if (tile === 4 && !spawnFound) { // Player spawn point
+                player.x = col * TILE_SIZE + TILE_SIZE / 2;
+                player.y = row * TILE_SIZE + TILE_SIZE / 2;
+                spawnFound = true; // Ensure only one spawn point is used
             }
         }
     }
