@@ -4,7 +4,8 @@ const ctx = canvas.getContext('2d');
 const TILE_SIZE = 64;
 const FOV = Math.PI / 4;
 const MAX_DEPTH = 500;
-const MINI_MAP_SCALE = 0.2;
+const MINI_MAP_SIZE = 100; // Size of the minimap
+const TILE_SCALE = 0.2; // Scale factor to make tiles smaller on the minimap
 
 const textures = {};
 const enemies = [];
@@ -259,55 +260,64 @@ function drawHand() {
 }
 
 function drawMiniMap() {
-    const mapWidth = map[0].length * TILE_SIZE * MINI_MAP_SCALE;
-    const mapHeight = map.length * TILE_SIZE * MINI_MAP_SCALE;
-    const offsetX = canvas.width - mapWidth - 20;
-    const offsetY = 20;
+    const miniMapWidth = MINI_MAP_SIZE;
+    const miniMapHeight = MINI_MAP_SIZE;
+
+    // Calculate the minimap viewport (centered on player)
+    const miniMapCenterX = canvas.width - miniMapWidth - 20; // 20px padding from the right
+    const miniMapCenterY = 20; // 20px padding from the top
+    const mapViewportSize = MINI_MAP_SIZE / TILE_SCALE; // Area of the map visible on the minimap
+    const mapOffsetX = Math.max(0, player.x - mapViewportSize / 2);
+    const mapOffsetY = Math.max(0, player.y - mapViewportSize / 2);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(offsetX, offsetY, mapWidth, mapHeight);
+    ctx.fillRect(miniMapCenterX, miniMapCenterY, miniMapWidth, miniMapHeight);
 
+    // Draw map tiles
     for (let row = 0; row < map.length; row++) {
         for (let col = 0; col < map[row].length; col++) {
             const tile = map[row][col];
             if (tile === 1) {
                 ctx.fillStyle = 'gray';
                 ctx.fillRect(
-                    offsetX + col * TILE_SIZE * MINI_MAP_SCALE,
-                    offsetY + row * TILE_SIZE * MINI_MAP_SCALE,
-                    TILE_SIZE * MINI_MAP_SCALE,
-                    TILE_SIZE * MINI_MAP_SCALE
+                    miniMapCenterX + (col * TILE_SIZE - mapOffsetX) * TILE_SCALE,
+                    miniMapCenterY + (row * TILE_SIZE - mapOffsetY) * TILE_SCALE,
+                    TILE_SIZE * TILE_SCALE,
+                    TILE_SIZE * TILE_SCALE
                 );
             }
         }
     }
 
+    // Draw enemies
     enemies.forEach(enemy => {
         ctx.fillStyle = 'blue';
         ctx.fillRect(
-            offsetX + enemy.x * MINI_MAP_SCALE - 2,
-            offsetY + enemy.y * MINI_MAP_SCALE - 2,
+            miniMapCenterX + (enemy.x - mapOffsetX) * TILE_SCALE - 2,
+            miniMapCenterY + (enemy.y - mapOffsetY) * TILE_SCALE - 2,
             4,
             4
         );
     });
 
+    // Draw player
     ctx.fillStyle = 'red';
     ctx.fillRect(
-        offsetX + player.x * MINI_MAP_SCALE - 2,
-        offsetY + player.y * MINI_MAP_SCALE - 2,
+        miniMapCenterX + (player.x - mapOffsetX) * TILE_SCALE - 2,
+        miniMapCenterY + (player.y - mapOffsetY) * TILE_SCALE - 2,
         4,
         4
     );
 
+    // Draw player's view direction
     const viewLength = 30;
-    const endX = offsetX + (player.x + Math.cos(player.angle) * viewLength) * MINI_MAP_SCALE;
-    const endY = offsetY + (player.y + Math.sin(player.angle) * viewLength) * MINI_MAP_SCALE;
+    const endX = miniMapCenterX + (player.x + Math.cos(player.angle) * viewLength - mapOffsetX) * TILE_SCALE;
+    const endY = miniMapCenterY + (player.y + Math.sin(player.angle) * viewLength - mapOffsetY) * TILE_SCALE;
 
     ctx.strokeStyle = 'yellow';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(offsetX + player.x * MINI_MAP_SCALE, offsetY + player.y * MINI_MAP_SCALE);
+    ctx.moveTo(miniMapCenterX + (player.x - mapOffsetX) * TILE_SCALE, miniMapCenterY + (player.y - mapOffsetY) * TILE_SCALE);
     ctx.lineTo(endX, endY);
     ctx.stroke();
 }
@@ -355,4 +365,5 @@ window.addEventListener('keyup', (e) => {
 });
 
 window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 loadMap();
