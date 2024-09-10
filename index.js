@@ -7,6 +7,7 @@ const MAX_DEPTH = 500;
 const MINI_MAP_SCALE = 0.2;
 
 const textures = {};
+const enemies = [];
 const player = {
     x: 100,
     y: 100,
@@ -31,7 +32,8 @@ function resizeCanvas() {
 
 async function loadTextures() {
     const textureSources = {
-        wall: 'wall.png' // Replace with the path to your texture image
+        wall: 'wall.png',  // Replace with the path to your wall texture image
+        enemy: 'enemy.png' // Replace with the path to your enemy sprite image
     };
 
     const promises = Object.entries(textureSources).map(([key, src]) =>
@@ -54,10 +56,26 @@ async function loadMap() {
         const data = await response.json();
         map = data.map;
         await loadTextures();
+        spawnEnemies();
         resizeCanvas();
         startGame();
     } catch (error) {
         console.error('Error loading the map or textures:', error);
+    }
+}
+
+function spawnEnemies() {
+    for (let row = 0; row < map.length; row++) {
+        for (let col = 0; col < map[row].length; col++) {
+            if (map[row][col] === 3) { // Enemy tile
+                enemies.push({
+                    x: col * TILE_SIZE + TILE_SIZE / 2,
+                    y: row * TILE_SIZE + TILE_SIZE / 2,
+                    sprite: 'enemy'
+                });
+                map[row][col] = 0; // Clear the enemy position on the map
+            }
+        }
     }
 }
 
@@ -69,6 +87,7 @@ function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     updatePlayer();
     castRays();
+    renderEnemies();
     drawMiniMap();
     requestAnimationFrame(gameLoop);
 }
@@ -147,6 +166,33 @@ function castSingleRay(angle) {
     return { distance: MAX_DEPTH, textureOffset: 0 };
 }
 
+function renderEnemies() {
+    enemies.forEach(enemy => {
+        const dx = enemy.x - player.x;
+        const dy = enemy.y - player.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        const angleToEnemy = Math.atan2(dy, dx);
+        let relativeAngle = angleToEnemy - player.angle;
+
+        if (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
+        if (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
+
+        const screenX = (relativeAngle / FOV + 0.5) * canvas.width;
+
+        if (distance > 0 && screenX >= 0 && screenX <= canvas.width) {
+            const spriteSize = (TILE_SIZE / distance) * 300;
+            ctx.drawImage(
+                textures[enemy.sprite],
+                screenX - spriteSize / 2,
+                canvas.height / 2 - spriteSize / 2,
+                spriteSize,
+                spriteSize
+            );
+        }
+    });
+}
+
 function drawMiniMap() {
     const mapWidth = map[0].length * TILE_SIZE * MINI_MAP_SCALE;
     const mapHeight = map.length * TILE_SIZE * MINI_MAP_SCALE;
@@ -170,6 +216,16 @@ function drawMiniMap() {
             }
         }
     }
+
+    enemies.forEach(enemy => {
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(
+            offsetX + enemy.x * MINI_MAP_SCALE - 2,
+            offsetY + enemy.y * MINI_MAP_SCALE - 2,
+            4,
+            4
+        );
+    });
 
     ctx.fillStyle = 'red';
     ctx.fillRect(
