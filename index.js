@@ -17,6 +17,8 @@ const player = {
 };
 
 let map = [];
+let currentMapIndex = 0;
+const maps = ['map1.json', 'map2.json']; // List of map files
 
 const keys = {
     forward: false,
@@ -52,8 +54,12 @@ async function loadTextures() {
 }
 
 async function loadMap() {
+    // Clear previous map's resources
+    enemies.length = 0;
+    map = [];
+    
     try {
-        const response = await fetch('map.json');
+        const response = await fetch(maps[currentMapIndex]);
         const data = await response.json();
         map = data.map;
         await loadTextures();
@@ -128,6 +134,8 @@ function updatePlayer() {
     }
 
     player.angle = (player.angle + 2 * Math.PI) % (2 * Math.PI);
+
+    checkMapTransition();
 }
 
 function isCollidingWithWall(x, y) {
@@ -139,6 +147,18 @@ function isCollidingWithWall(x, y) {
     }
 
     return map[mapY][mapX] === 1;
+}
+
+function checkMapTransition() {
+    const mapX = Math.floor(player.x / TILE_SIZE);
+    const mapY = Math.floor(player.y / TILE_SIZE);
+
+    if (mapX >= 0 && mapY >= 0 && mapX < map[0].length && mapY < map.length) {
+        if (map[mapY][mapX] === 5) { // Map transition point
+            currentMapIndex = (currentMapIndex + 1) % maps.length;
+            loadMap(); // Load the next map
+        }
+    }
 }
 
 function castRays() {
