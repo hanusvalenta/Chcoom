@@ -1,17 +1,16 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Game settings
 const TILE_SIZE = 64;
 const player = {
     x: 100,
     y: 100,
-    angle: 0, // Player's viewing direction in radians
-    speed: 2, // Movement speed
-    rotationSpeed: 0.05 // Rotation speed
+    angle: 0,
+    speed: 2,
+    rotationSpeed: 0.05
 };
 
-let map = []; // Initialize an empty map
+let map = [];
 
 const keys = {
     forward: false,
@@ -20,50 +19,46 @@ const keys = {
     right: false
 };
 
-// Load the map from JSON file
 async function loadMap() {
     try {
         const response = await fetch('map.json');
         const data = await response.json();
         map = data.map;
-        startGame(); // Start the game loop after loading the map
+        startGame();
     } catch (error) {
         console.error('Error loading the map:', error);
     }
 }
 
 function startGame() {
-    // Start the main game loop
     gameLoop();
 }
 
-// Main game loop
 function gameLoop() {
-    // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Update player position
     updatePlayer();
-
-    // Cast rays and render scene
     castRays();
-
-    // Request the next frame
     requestAnimationFrame(gameLoop);
 }
 
 function updatePlayer() {
-    // Forward and backward movement
+    let newX = player.x;
+    let newY = player.y;
+
     if (keys.forward) {
-        player.x += Math.cos(player.angle) * player.speed;
-        player.y += Math.sin(player.angle) * player.speed;
+        newX += Math.cos(player.angle) * player.speed;
+        newY += Math.sin(player.angle) * player.speed;
     }
     if (keys.backward) {
-        player.x -= Math.cos(player.angle) * player.speed;
-        player.y -= Math.sin(player.angle) * player.speed;
+        newX -= Math.cos(player.angle) * player.speed;
+        newY -= Math.sin(player.angle) * player.speed;
     }
 
-    // Left and right rotation
+    if (!isCollidingWithWall(newX, newY)) {
+        player.x = newX;
+        player.y = newY;
+    }
+
     if (keys.left) {
         player.angle -= player.rotationSpeed;
     }
@@ -71,19 +66,24 @@ function updatePlayer() {
         player.angle += player.rotationSpeed;
     }
 
-    // Prevent the angle from going beyond 2*PI (full rotation)
     player.angle = (player.angle + 2 * Math.PI) % (2 * Math.PI);
 }
 
-function castRays() {
-    // Draw the 2D map
-    draw2DMap();
+function isCollidingWithWall(x, y) {
+    const mapX = Math.floor(x / TILE_SIZE);
+    const mapY = Math.floor(y / TILE_SIZE);
 
-    // Draw the player
+    if (mapX < 0 || mapY < 0 || mapX >= map[0].length || mapY >= map.length) {
+        return true;
+    }
+
+    return map[mapY][mapX] === 1;
+}
+
+function castRays() {
+    draw2DMap();
     ctx.fillStyle = 'red';
     ctx.fillRect(player.x - 5, player.y - 5, 10, 10);
-
-    // Draw the player's viewing direction
     drawPlayerView();
 }
 
@@ -100,20 +100,18 @@ function draw2DMap() {
 }
 
 function drawPlayerView() {
-    // Draw a line representing the player's viewing direction
-    const viewLength = 50; // Length of the line to indicate the viewing direction
+    const viewLength = 50;
     const endX = player.x + Math.cos(player.angle) * viewLength;
     const endY = player.y + Math.sin(player.angle) * viewLength;
 
     ctx.strokeStyle = 'yellow';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(player.x, player.y); // Start from the player's position
-    ctx.lineTo(endX, endY);         // Draw to the endpoint in the direction of the viewing angle
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(endX, endY);
     ctx.stroke();
 }
 
-// Handle keyboard input
 window.addEventListener('keydown', (e) => {
     switch (e.key) {
         case 'w':
@@ -156,5 +154,4 @@ window.addEventListener('keyup', (e) => {
     }
 });
 
-// Start loading the map
 loadMap();
