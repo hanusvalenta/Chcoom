@@ -4,8 +4,9 @@ const ctx = canvas.getContext('2d');
 const TILE_SIZE = 64;
 const FOV = Math.PI / 4;
 const MAX_DEPTH = 500;
-const MINI_MAP_SCALE = 0.2; // Scale for the mini-map
+const MINI_MAP_SCALE = 0.2;
 
+const textures = {};
 const player = {
     x: 100,
     y: 100,
@@ -23,10 +24,28 @@ const keys = {
     right: false
 };
 
-// Fullscreen the canvas
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+}
+
+async function loadTextures() {
+    const textureSources = {
+        wall: 'wall.png' // Replace with the path to your texture image
+    };
+
+    const promises = Object.entries(textureSources).map(([key, src]) =>
+        new Promise((resolve) => {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => {
+                textures[key] = img;
+                resolve();
+            };
+        })
+    );
+
+    await Promise.all(promises);
 }
 
 async function loadMap() {
@@ -34,10 +53,11 @@ async function loadMap() {
         const response = await fetch('map.json');
         const data = await response.json();
         map = data.map;
+        await loadTextures();
         resizeCanvas();
         startGame();
     } catch (error) {
-        console.error('Error loading the map:', error);
+        console.error('Error loading the map or textures:', error);
     }
 }
 
@@ -95,15 +115,18 @@ function isCollidingWithWall(x, y) {
 function castRays() {
     const halfFOV = FOV / 2;
     const startAngle = player.angle - halfFOV;
-    const numRays = canvas.width; // Adjust number of rays to canvas width
+    const numRays = canvas.width;
 
     for (let i = 0; i < numRays; i++) {
         const rayAngle = startAngle + (i / numRays) * FOV;
-        const distance = castSingleRay(rayAngle);
+        const { distance, textureOffset } = castSingleRay(rayAngle);
         const sliceHeight = (TILE_SIZE / distance) * 300;
 
-        ctx.fillStyle = `rgb(${255 - distance}, ${255 - distance}, ${255 - distance})`;
-        ctx.fillRect(i, (canvas.height - sliceHeight) / 2, 1, sliceHeight);
+        ctx.drawImage(
+            textures.wall,
+            textureOffset, 0, 1, TILE_SIZE,  // Source from texture
+            i, (canvas.height - sliceHeight) / 2, 1, sliceHeight  // Destination on canvas
+        );
     }
 }
 
@@ -116,18 +139,19 @@ function castSingleRay(angle) {
         let y = player.y + sin * depth;
 
         if (isCollidingWithWall(x, y)) {
-            return depth;
+            const textureOffset = Math.floor((x % TILE_SIZE) / TILE_SIZE * textures.wall.width);
+            return { distance: depth, textureOffset: textureOffset };
         }
     }
 
-    return MAX_DEPTH;
+    return { distance: MAX_DEPTH, textureOffset: 0 };
 }
 
 function drawMiniMap() {
     const mapWidth = map[0].length * TILE_SIZE * MINI_MAP_SCALE;
     const mapHeight = map.length * TILE_SIZE * MINI_MAP_SCALE;
-    const offsetX = canvas.width - mapWidth - 20; // 20 pixels padding from the right edge
-    const offsetY = 20; // 20 pixels padding from the top edge
+    const offsetX = canvas.width - mapWidth - 20;
+    const offsetY = 20;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(offsetX, offsetY, mapWidth, mapHeight);
