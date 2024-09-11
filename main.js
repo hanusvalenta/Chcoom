@@ -9,6 +9,7 @@ const TILE_SCALE = 0.2; // Scale factor to make tiles smaller on the minimap
 
 const textures = {};
 const enemies = [];
+const doors = [];
 const player = {
     x: 100,
     y: 100,
@@ -25,12 +26,19 @@ const keys = {
     forward: false,
     backward: false,
     left: false,
-    right: false
+    right: false,
+    openDoor: false
 };
 
 // Floor and Ceiling Colors
 const FLOOR_COLOR = '#6e8b3d'; // Example floor color
 const CEILING_COLOR = '#4a4a4a'; // Example ceiling color
+
+// Door states
+const DOOR_CLOSED = 0;
+const DOOR_OPEN = 1;
+const DOOR_OPEN_TIME = 5000; // Time in milliseconds for the door to stay open
+let doorOpenTimeout = null;
 
 function resizeCanvas() {
     canvas.width = window.innerWidth;
@@ -42,7 +50,8 @@ async function loadTextures() {
         wall: 'wall.png',
         enemy: 'enemy.png',
         hand: 'hand.png',
-        doorClosed: 'doorClosed.png'
+        doorClosed: 'doorClosed.png',
+        doorOpen: 'doorOpen.png'
     };
 
     const promises = Object.entries(textureSources).map(([key, src]) =>
@@ -62,6 +71,7 @@ async function loadTextures() {
 async function loadMap() {
     // Clear previous map's resources
     enemies.length = 0;
+    doors.length = 0;
     map = [];
     
     try {
@@ -95,6 +105,13 @@ function spawnEntities() {
                 player.x = col * TILE_SIZE + TILE_SIZE / 2;
                 player.y = row * TILE_SIZE + TILE_SIZE / 2;
                 spawnFound = true; // Ensure only one spawn point is used
+            } else if (tile === 6) { // Door tile
+                doors.push({
+                    x: col * TILE_SIZE + TILE_SIZE / 2,
+                    y: row * TILE_SIZE + TILE_SIZE / 2,
+                    state: DOOR_CLOSED
+                });
+                map[row][col] = 0; // Clear the door position on the map
             }
         }
     }
@@ -111,6 +128,7 @@ function gameLoop() {
     renderEnemies();
     drawHand();
     drawMiniMap();
+    drawDoors();
     requestAnimationFrame(gameLoop);
 }
 
@@ -127,7 +145,7 @@ function updatePlayer() {
         newY -= Math.sin(player.angle) * player.speed;
     }
 
-    if (!isCollidingWithWall(newX, newY)) {
+    if (!isCollidingWithObstacle(newX, newY)) {
         player.x = newX;
         player.y = newY;
     }
@@ -142,9 +160,14 @@ function updatePlayer() {
     player.angle = (player.angle + 2 * Math.PI) % (2 * Math.PI);
 
     checkMapTransition();
+
+    if (keys.openDoor) {
+        keys.openDoor = false;
+        openClosestDoor();
+    }
 }
 
-function isCollidingWithWall(x, y) {
+function isCollidingWithObstacle(x, y) {
     const mapX = Math.floor(x / TILE_SIZE);
     const mapY = Math.floor(y / TILE_SIZE);
 
@@ -152,7 +175,20 @@ function isCollidingWithWall(x, y) {
         return true;
     }
 
-    return map[mapY][mapX] === 1 || map[mapY][mapX] === 6; // Include 6 for walls with door texture
+    if (map[mapY][mapX] === 1) {
+        return true; // Collides with wall
+    }
+
+    // Check for door collisions
+    for (const door of doors) {
+        if (Math.abs(door.x - x) < TILE_SIZE / 2 && Math.abs(door.y - y) < TILE_SIZE / 2) {
+            if (door.state === DOOR_CLOSED) {
+                return true; // Collides with closed door
+            }
+        }
+    }
+
+    return false;
 }
 
 function checkMapTransition() {
@@ -167,6 +203,29 @@ function checkMapTransition() {
     }
 }
 
+function openClosestDoor() {
+    const mapX = Math.floor(player.x / TILE_SIZE);
+    const mapY = Math.floor(player.y / TILE_SIZE);
+
+    let closestDoor = null;
+    let minDistance = Infinity;
+
+    doors.forEach(door => {
+        const distance = Math.sqrt(Math.pow(door.x - player.x, 2) + Math.pow(door.y - player.y, 2));
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestDoor = door;
+        }
+    });
+
+    if (closestDoor) {
+        closestDoor.state = DOOR_OPEN;
+        setTimeout(() => {
+            closestDoor.state = DOOR_CLOSED;
+        }, DOOR_OPEN_TIME);
+    }
+}
+
 function castRays() {
     const halfFOV = FOV / 2;
     const startAngle = player.angle - halfFOV;
@@ -175,14 +234,14 @@ function castRays() {
 
     for (let i = 0; i < numRays; i++) {
         const rayAngle = startAngle + (i / numRays) * FOV;
-        const { distance, textureOffset, texture } = castSingleRay(rayAngle);
-        rays.push({ rayAngle, distance, textureOffset, texture, i });
+        const { distance, textureOffset } = castSingleRay(rayAngle);
+        rays.push({ rayAngle, distance, textureOffset, i });
     }
 
     // Sort rays by distance (depth buffering)
     rays.sort((a, b) => a.distance - b.distance);
 
-    rays.forEach(({ rayAngle, distance, textureOffset, texture, i }) => {
+    rays.forEach(({ rayAngle, distance, textureOffset, i }) => {
         const sliceHeight = (TILE_SIZE / distance) * 300;
 
         // Draw the ceiling
@@ -191,7 +250,7 @@ function castRays() {
 
         // Draw the wall
         ctx.drawImage(
-            textures[texture],
+            textures.wall,
             textureOffset, 0, 1, TILE_SIZE,
             i, (canvas.height - sliceHeight) / 2, 1, sliceHeight
         );
@@ -210,24 +269,17 @@ function castSingleRay(angle) {
         let x = player.x + cos * depth;
         let y = player.y + sin * depth;
 
-        const mapX = Math.floor(x / TILE_SIZE);
-        const mapY = Math.floor(y / TILE_SIZE);
-
-        if (mapX >= 0 && mapY >= 0 && mapX < map[0].length && mapY < map.length) {
-            const tile = map[mapY][mapX];
-            if (tile === 1 || tile === 6) {
-                const texture = tile === 1 ? 'wall' : 'doorClosed'; // Use appropriate texture
-                const textureOffset = Math.floor((x % TILE_SIZE) / TILE_SIZE * textures[texture].width);
-                return { distance: depth, textureOffset: textureOffset, texture: texture };
-            }
+        if (isCollidingWithObstacle(x, y)) {
+            const textureOffset = Math.floor((x % TILE_SIZE) / TILE_SIZE * 64); // Simple texture offset
+            return { distance: depth, textureOffset };
         }
     }
 
-    return { distance: MAX_DEPTH, textureOffset: 0, texture: 'wall' };
+    return { distance: MAX_DEPTH, textureOffset: 0 };
 }
 
 function renderEnemies() {
-    // Sort enemies by distance from the player
+    // Sort enemies by distance to player
     enemies.sort((a, b) => {
         const dxA = a.x - player.x;
         const dyA = a.y - player.y;
@@ -295,21 +347,15 @@ function drawMiniMap() {
     for (let row = 0; row < map.length; row++) {
         for (let col = 0; col < map[row].length; col++) {
             const tile = map[row][col];
-
             if (tile === 1) {
-                ctx.fillStyle = 'gray'; // Wall color
-            } else if (tile === 6) {
-                ctx.fillStyle = 'brown'; // Door color
-            } else {
-                continue; // Skip empty tiles
+                ctx.fillStyle = 'gray';
+                ctx.fillRect(
+                    miniMapCenterX + (col * TILE_SIZE - mapOffsetX) * TILE_SCALE,
+                    miniMapCenterY + (row * TILE_SIZE - mapOffsetY) * TILE_SCALE,
+                    TILE_SIZE * TILE_SCALE,
+                    TILE_SIZE * TILE_SCALE
+                );
             }
-
-            ctx.fillRect(
-                miniMapCenterX + (col * TILE_SIZE - mapOffsetX) * TILE_SCALE,
-                miniMapCenterY + (row * TILE_SIZE - mapOffsetY) * TILE_SCALE,
-                TILE_SIZE * TILE_SCALE,
-                TILE_SIZE * TILE_SCALE
-            );
         }
     }
 
@@ -346,6 +392,36 @@ function drawMiniMap() {
     ctx.stroke();
 }
 
+function drawDoors() {
+    doors.forEach(door => {
+        const dx = door.x - player.x;
+        const dy = door.y - player.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        const angleToDoor = Math.atan2(dy, dx);
+        let relativeAngle = angleToDoor - player.angle;
+
+        if (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
+        if (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
+
+        const screenX = (relativeAngle / FOV + 0.5) * canvas.width;
+
+        if (distance > 0 && screenX >= 0 && screenX <= canvas.width) {
+            const rayHit = castSingleRay(angleToDoor);
+            if (rayHit.distance > distance) {
+                const doorSize = (TILE_SIZE / distance) * 300;
+                ctx.drawImage(
+                    textures[door.state === DOOR_OPEN ? 'doorOpen' : 'doorClosed'],
+                    screenX - doorSize / 2,
+                    canvas.height / 2 - doorSize / 2,
+                    doorSize,
+                    doorSize
+                );
+            }
+        }
+    });
+}
+
 window.addEventListener('keydown', (e) => {
     switch (e.key) {
         case 'w':
@@ -363,6 +439,9 @@ window.addEventListener('keydown', (e) => {
         case 'd':
         case 'ArrowRight':
             keys.right = true;
+            break;
+        case ' ':
+            keys.openDoor = true;
             break;
     }
 });
@@ -384,6 +463,9 @@ window.addEventListener('keyup', (e) => {
         case 'd':
         case 'ArrowRight':
             keys.right = false;
+            break;
+        case ' ':
+            keys.openDoor = false;
             break;
     }
 });
