@@ -28,6 +28,10 @@ const keys = {
     right: false
 };
 
+// Floor and Ceiling Colors
+const FLOOR_COLOR = '#6e8b3d'; // Example floor color
+const CEILING_COLOR = '#4a4a4a'; // Example ceiling color
+
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -180,11 +184,20 @@ function castRays() {
     rays.forEach(({ rayAngle, distance, textureOffset, i }) => {
         const sliceHeight = (TILE_SIZE / distance) * 300;
 
+        // Draw the ceiling
+        ctx.fillStyle = CEILING_COLOR;
+        ctx.fillRect(i, 0, 1, (canvas.height - sliceHeight) / 2);
+
+        // Draw the wall
         ctx.drawImage(
             textures.wall,
             textureOffset, 0, 1, TILE_SIZE,
             i, (canvas.height - sliceHeight) / 2, 1, sliceHeight
         );
+
+        // Draw the floor
+        ctx.fillStyle = FLOOR_COLOR;
+        ctx.fillRect(i, (canvas.height + sliceHeight) / 2, 1, canvas.height - (canvas.height + sliceHeight) / 2);
     });
 }
 
@@ -269,9 +282,6 @@ function drawMiniMap() {
     const mapViewportSize = MINI_MAP_SIZE / TILE_SCALE; // Area of the map visible on the minimap
     const mapOffsetX = Math.max(0, player.x - mapViewportSize / 2);
     const mapOffsetY = Math.max(0, player.y - mapViewportSize / 2);
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(miniMapCenterX, miniMapCenterY, miniMapWidth, miniMapHeight);
 
     // Draw map tiles
     for (let row = 0; row < map.length; row++) {
