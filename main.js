@@ -29,8 +29,8 @@ const keys = {
 };
 
 // Floor and Ceiling Colors
-const FLOOR_COLOR = '#6e8b3d'; // Example floor color
-const CEILING_COLOR = '#4a4a4a'; // Example ceiling color
+const FLOOR_COLOR = '#b2aaa7'; // Example floor color
+const CEILING_COLOR = '#544444'; // Example ceiling color
 
 function resizeCanvas() {
     canvas.width = window.innerWidth;
