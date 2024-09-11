@@ -9,6 +9,7 @@ const TILE_SCALE = 0.2; // Scale factor to make tiles smaller on the minimap
 
 const textures = {};
 const enemies = [];
+const doors = []; // New array for doors
 const player = {
     x: 100,
     y: 100,
@@ -25,12 +26,13 @@ const keys = {
     forward: false,
     backward: false,
     left: false,
-    right: false
+    right: false,
+    openDoor: false // New key state for opening doors
 };
 
 // Floor and Ceiling Colors
-const FLOOR_COLOR = '#b2aaa7'; // Example floor color
-const CEILING_COLOR = '#544444'; // Example ceiling color
+const FLOOR_COLOR = '#6e8b3d'; // Example floor color
+const CEILING_COLOR = '#4a4a4a'; // Example ceiling color
 
 function resizeCanvas() {
     canvas.width = window.innerWidth;
@@ -41,7 +43,9 @@ async function loadTextures() {
     const textureSources = {
         wall: 'wall.png',
         enemy: 'enemy.png',
-        hand: 'hand.png'
+        hand: 'hand.png',
+        doorClosed: 'doorClosed.png',
+        doorOpen: 'doorOpen.png'
     };
 
     const promises = Object.entries(textureSources).map(([key, src]) =>
@@ -61,8 +65,9 @@ async function loadTextures() {
 async function loadMap() {
     // Clear previous map's resources
     enemies.length = 0;
+    doors.length = 0;
     map = [];
-    
+
     try {
         const response = await fetch(maps[currentMapIndex]);
         const data = await response.json();
@@ -94,6 +99,14 @@ function spawnEntities() {
                 player.x = col * TILE_SIZE + TILE_SIZE / 2;
                 player.y = row * TILE_SIZE + TILE_SIZE / 2;
                 spawnFound = true; // Ensure only one spawn point is used
+            } else if (tile === 6) { // Door tile
+                doors.push({
+                    x: col * TILE_SIZE + TILE_SIZE / 2,
+                    y: row * TILE_SIZE + TILE_SIZE / 2,
+                    isOpen: false, // Door starts closed
+                    closeTimeout: null // Store timeout reference
+                });
+                map[row][col] = 0; // Clear the door position on the map
             }
         }
     }
@@ -108,6 +121,7 @@ function gameLoop() {
     updatePlayer();
     castRays();
     renderEnemies();
+    renderDoors(); // Render doors
     drawHand();
     drawMiniMap();
     requestAnimationFrame(gameLoop);
@@ -141,6 +155,10 @@ function updatePlayer() {
     player.angle = (player.angle + 2 * Math.PI) % (2 * Math.PI);
 
     checkMapTransition();
+    if (keys.openDoor) {
+        openClosestDoor();
+        keys.openDoor = false; // Reset the door key
+    }
 }
 
 function isCollidingWithWall(x, y) {
@@ -151,7 +169,16 @@ function isCollidingWithWall(x, y) {
         return true;
     }
 
-    return map[mapY][mapX] === 1;
+    const tile = map[mapY][mapX];
+    if (tile === 1 || (tile === 6 && !isDoorOpen(mapY, mapX))) { // Check if door is closed
+        return true;
+    }
+
+    return false;
+}
+
+function isDoorOpen(row, col) {
+    return doors.some(door => door.x === col * TILE_SIZE + TILE_SIZE / 2 && door.y === row * TILE_SIZE + TILE_SIZE / 2 && door.isOpen);
 }
 
 function checkMapTransition() {
@@ -261,6 +288,68 @@ function renderEnemies() {
     });
 }
 
+function renderDoors() {
+    doors.forEach(door => {
+        const dx = door.x - player.x;
+        const dy = door.y - player.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        const angleToDoor = Math.atan2(dy, dx);
+        let relativeAngle = angleToDoor - player.angle;
+
+        if (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
+        if (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
+
+        const screenX = (relativeAngle / FOV + 0.5) * canvas.width;
+
+        if (distance > 0 && screenX >= 0 && screenX <= canvas.width) {
+            const rayHit = castSingleRay(angleToDoor);
+            if (rayHit.distance > distance) {
+                const doorSprite = door.isOpen ? 'doorOpen' : 'doorClosed';
+                const spriteSize = (TILE_SIZE / distance) * 300;
+                ctx.drawImage(
+                    textures[doorSprite],
+                    screenX - spriteSize / 2,
+                    canvas.height / 2 - spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+            }
+        }
+    });
+}
+
+function openClosestDoor() {
+    const playerX = player.x;
+    const playerY = player.y;
+
+    // Find the closest door
+    let closestDoor = null;
+    let closestDistance = Infinity;
+
+    doors.forEach(door => {
+        const dx = door.x - playerX;
+        const dy = door.y - playerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestDoor = door;
+        }
+    });
+
+    if (closestDoor) {
+        closestDoor.isOpen = true; // Open the door
+        // Set a timeout to close the door after 5 seconds
+        if (closestDoor.closeTimeout) {
+            clearTimeout(closestDoor.closeTimeout);
+        }
+        closestDoor.closeTimeout = setTimeout(() => {
+            closestDoor.isOpen = false;
+        }, 5000);
+    }
+}
+
 function drawHand() {
     const handScale = 1.5; // Scale factor for the hand sprite
     const handWidth = textures.hand.width * handScale;
@@ -350,6 +439,9 @@ window.addEventListener('keydown', (e) => {
         case 'ArrowRight':
             keys.right = true;
             break;
+        case ' ':
+            keys.openDoor = true; // Set the open door key to true
+            break;
     }
 });
 
@@ -370,6 +462,9 @@ window.addEventListener('keyup', (e) => {
         case 'd':
         case 'ArrowRight':
             keys.right = false;
+            break;
+        case ' ':
+            keys.openDoor = false; // Reset the open door key
             break;
     }
 });
