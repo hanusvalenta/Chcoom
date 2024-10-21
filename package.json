@@ -1,0 +1,14 @@
+{
+  "name": "chcoom",
+  "version": "1.0.0",
+  "description": "just a CHC doom clone made javacript",
+  "main": "start.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^33.0.1"
+  }
+}
