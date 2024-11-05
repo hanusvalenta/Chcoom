@@ -20,7 +20,7 @@ const player = {
 
 let map = [];
 let currentMapIndex = 0;
-const maps = ['map1.json', 'map2.json', 'map3.json']; // List of map files
+const maps = ['map1.map', 'map2.map', 'map3.map']; // List of map files
 
 const keys = {
     forward: false,
@@ -51,7 +51,7 @@ async function loadTextures() {
         enemy: 'enemy.png',
         hand: 'hand.png',
         doorClosed: 'doorClosed.png',
-        doorOpen: 'doorOpen.png'
+        doorOpen: 'blank.png'
     };
 
     const promises = Object.entries(textureSources).map(([key, src]) =>
